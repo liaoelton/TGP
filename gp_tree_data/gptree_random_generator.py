@@ -61,7 +61,10 @@ div_ = Function(div , "div", 2)
 sin_ = Function(np.sin , "sin" , 1)
 cos_ = Function(np.cos, "cos" , 1)
 
-
+and_ = Function(np.logical_and, "and" , 2)
+or_ = Function(np.logical_or , "or", 2 )
+not_ = Function(np.logical_not ,"not",1)
+xor_ = Function(np.logical_xor ,"xor" , 2)
 
 CommonFunction = {
     "addOne" : addOne_ ,
@@ -76,6 +79,11 @@ CommonFunction = {
     "div" : div_,
     "sin" : sin_,
     "cos" : cos_,
+
+    "and" : and_,
+    "or": or_,
+    "not":not_,
+    "xor": xor_,
 }
 
 
@@ -437,7 +445,7 @@ class Program : #binary version
     def valid(self, program):
         if len(program) == 1 and program[0] < 0 :
             return True
-        Counter = [self.function_set[program[0]].arity]
+        Counter = [self.function_set[program[0]-1].arity]
         #print("====", program)
         for p in program[1:]:
            #print(p , Counter)    
@@ -445,7 +453,7 @@ class Program : #binary version
                 Counter[-1] -= 1
             else:
                 Counter[-1] -= 1
-                Counter.append( self.function_set[p].arity )
+                Counter.append( self.function_set[p-1].arity )
             while Counter !=[] and Counter[-1] == 0:
                 Counter.pop()
         return (Counter == [])
@@ -478,13 +486,13 @@ class Program : #binary version
                     output.append(tmp)
             else:
                     #print(p,i,output , self.program)
-                    if self.function_set[p].arity == 1:
-                        tmp = self.function_set[p](self.values[-1])
+                    if self.function_set[p-1].arity == 1:
+                        tmp = self.function_set[p-1](self.values[-1])
                         output[-1] = tmp
-                    if self.function_set[p].arity == 2:
+                    if self.function_set[p-1].arity == 2:
                         
                         
-                        tmp = self.function_set[p](output[-1],output[-2])
+                        tmp = self.function_set[p-1](output[-1],output[-2])
                         output[-2] = tmp
                         output.pop()
          
@@ -556,7 +564,7 @@ class Program : #binary version
                 if IdxStack != []:
                     self.parentIdx[i] = IdxStack[-1] 
                 IdxStack.append(i)
-                remain.append( self.function_set[ self.program[i] ].arity )
+                remain.append( self.function_set[ self.program[i]-1 ].arity )
 
     def get_path_range(self,i):
         cur = i
@@ -590,16 +598,16 @@ class Program : #binary version
             d = 0
             Counter = []
 
-            choice = random.randint(0,f-1)
+            choice = random.randint(1,f)
             self.program.append(choice)
             
-            Counter.append(self.function_set[choice].arity)
+            Counter.append(self.function_set[choice-1].arity)
             while (Counter != []):
                 if len(Counter) < depth :
                     Counter[-1] -= 1
-                    choice = random.randint(0,f-1)
+                    choice = random.randint(1,f)
                     self.program.append(choice)
-                    Counter.append(self.function_set[choice].arity)
+                    Counter.append(self.function_set[choice-1].arity)
                 else:
                     Counter[-1] -= 1
                     choice = -1 * random.randint(1,t)
@@ -621,7 +629,7 @@ class Program : #binary version
                 else:
                     p = 1 # must terminate !! 
                 if p < 0.9: #function
-                    self.program.append(random.randint(0,f-1))
+                    self.program.append(random.randint(1,f))
                 else:
                     not_terminal = False
                     self.program.append(-1 * random.randint(1,t))
@@ -639,8 +647,8 @@ class Program : #binary version
             else:
                 if len(Counter) != 0 :
                     Counter[-1] -= 1
-                Counter.append(self.function_set[p].arity)
-                print(self.function_set[p].name , "(", end=" ")
+                Counter.append(self.function_set[p-1].arity)
+                print(self.function_set[p-1].name , "(", end=" ")
             while Counter != [] and Counter[-1] == 0:
                 Counter.pop()
                 print(")",end=" ")
@@ -650,14 +658,14 @@ class Program : #binary version
    
         if self.program[i] < 0:
             return i
-        counter = self.function_set[self.program[i]].arity 
+        counter = self.function_set[self.program[i]-1].arity 
         cur = i
 
         while counter != 0:
             cur += 1
             counter -= 1
             if self.program[cur] >= 0:
-                counter += self.function_set[self.program[i]].arity 
+                counter += self.function_set[self.program[i]-1].arity 
         return cur
     def _copy(self,p):
         self.program = copy.deepcopy(p.program)
@@ -668,27 +676,84 @@ class Program : #binary version
         
             
         
-function_set = [ CommonFunction["add"] 
-                , CommonFunction["sub"] 
-                ,  CommonFunction["mul"]
-                ,  CommonFunction["div"] 
+function_set = [ CommonFunction["and"] 
+                ,  CommonFunction["or"]
+                ,  CommonFunction["xor"] 
+    
                 ]
 
-p = 10000
+def BinaryToDecimal( binary ):
+    n = "".join(binary)
+    #print(n)
+    return int(n,2)
 
-X = np.linspace(-10, 10, num=50)
-X = np.array( [np.array([x]) for x in X] )
+from itertools import product
+X = list(product([1, 0], repeat=3) )
+# [[true , true , true ] ...  ] 
+
+
+X = np.array( [np.array(x) for x in X] )
+# 2**n 個input , output   [1,0,0,1 ...] #len = 2**n
+# 2**(2**n)種class
+
 import json 
 
 output = []
 id = 0
-for d in range(1,11):
-    for i in range( (2**d) // 2 + 1 ):
+for d in range(1,8):
+    print( d,len(function_set)*(2**d) * len(X[0])*(2**d)  )
+    all_binary = len(function_set)*(2**d) * len(X[0])*(2**d)  
+    for _ in range( all_binary//2 + 1 ):
+        
         output.append({})
-        test = Program( [1] , function_set , depth=d)
+        test = Program( [ i for i in range(len(X[0])) ] , function_set , depth=d)
         output[-1]["program"] = test.program
         output[-1]["output"] = list(test.execute(X))
+
+        output[-1]["output"] = [ str(int(i)) for i in output[-1]["output"] ]
+        output[-1]["output"] = BinaryToDecimal( output[-1]["output"])  
+
         output[-1]["id"] = id
         id += 1
+
+
+
+
+print("total num of data:" , len(output))
+
+print( X ,output[2])
+class NpEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.bool_):
+            return bool(obj)
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            return float(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return json.JSONEncoder.default(self, obj)       
 with open("GP_rand_tree.json", "w") as f:
-    json.dump(output, f)
+    json.dump(output, f ,cls=NpEncoder)
+"""
+import matplotlib.pyplot as plt
+from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
+X = [ output[i]["output"] for i in range(len(output)) ] 
+
+silhouette_avg = []
+labels = []
+for i in range(2,11):
+    kmeans_fit = KMeans(n_clusters = i).fit(X)
+    silhouette_avg.append(silhouette_score(X, kmeans_fit.labels_))
+    labels.append(kmeans_fit.labels_)
+print(silhouette_avg)
+print(labels)
+
+for i in range(len(output)):
+    output[i]["label"] = int(labels[ np.argmax(silhouette_avg) ][i])
+    
+print([ output[i]["label"] for i in range(len(output)) ] )
+
+
+"""
