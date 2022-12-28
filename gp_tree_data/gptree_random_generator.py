@@ -84,6 +84,7 @@ CommonFunction = {
     "or": or_,
     "not":not_,
     "xor": xor_,
+
 }
 
 
@@ -101,345 +102,29 @@ def get_fitness_MAD(program , X , y):
 
 
 
-class Population :
-    def __init__ (self , 
-                terminal_set , 
-                function_set ,
-                num_population , 
-                generation , 
-                data_X,
-                data_y, 
-                depth = 5 ):
-        self.num_population = num_population 
-        self.terminal_set = terminal_set
-        self.function_set = function_set
-        
-        
-        self.dim = len(data_X[0])
-        self.depth = depth
-        self.generation = generation
-        self.programs = [Program(terminal_set , function_set) for _ in range(self.num_population )  ]
-        self.X = data_X
-        self.y = data_y
-  
-        self.minX = [ min([x for x in data_X[:,i]])  for i in range(self.dim) ]
-        self.maxX = [ max([x for x in data_X[:,i]])  for i in range(self.dim) ]
-        
-        self.rangeX = [ abs(self.maxX[i] - self.minX[i]) for i in range(len(self.maxX))  ]
-
-
-
-
-        self.cluster_bigger = [[] , []] # funcs , args
-        self.cluster_smaller = [[], []] # funcs , args
-        
-        self.target_range = abs( max(data_y) - min(data_y) )
-        #self.input_range = abs( max(data_X) - min(data_X) )
-        #build bigger function
-        self.bigger_function = []
-        self.smaller_function = []
-        """
-        idx = 0
-      
-        for f in function_set:
-            if f.arity == 1:
-                output = [f(x) for x in self.X]
-            
-                r = abs( max(output) - min(output) ) / abs( max( data_X ) - min( data_X ) )
-            
-                if r > 1:
-                    self.bigger_function.append(idx)
-                elif r < 1: 
-                    self.smaller_function.append(idx)
-                idx+=1
-            elif f.arity == 2:
-                output = [f(x,x) for x in self.X]
-            
-                r = abs( max(output) - min(output) ) / abs( max( data_X ) - min( data_X ) )
-            
-                if r > 1:
-                    self.bigger_function.append(idx)
-                elif r < 1: 
-                    self.smaller_function.append(idx)
-                idx+=1
-        """
-        for p in self.programs:
-            p.fitness = get_fitness_MAD(p , data_X ,data_y)
-        
-        
-    def tournament_selection(self):
-        a = random.choice(self.programs)
-        b = random.choice(self.programs)
-       
-        if a.fitness < b.fitness:
-            return a
-        else:
-            return b
-  
-    def one_point_crossover(self , donor , receiver  ):
-        # receiver : Program class
-        # donor : Program class
-        donor_cutpoint = random.randint(0,len(donor.program)-1)
-        receiver_cutpoint = random.randint(0,len(receiver.program)-1)
-        new_program =  donor.program[:donor_cutpoint] + receiver.program[receiver_cutpoint:]
-
-        return Program(self.terminal_set , self.function_set , program=new_program)
- 
-    def subtree_mutation(self , donor):
-        new_chicken = Program(self.terminal_set  , self.function_set , self.depth)
-        return self.one_point_crossover(donor , new_chicken)
-
-    def run_once(self):
-        
-        self.next_programs = [ self.programs[i] for i in range(self.num_population)]
-        self.parent_func = [ self.programs[i] for i in range(self.num_population)]
-        self.parent_args = [ self.programs[i] for i in range(self.num_population)]
-        
-      
-        for i in range(self.num_population):
-            p = random.uniform(0, 1)
-            if p < 0: # dimension mutation 
-                donor = self.tournament_selection()
-                terminals = [i for i in range(len(donor.program)) if donor.program[i] < 0   ]
-                terminal_i = random.choice(terminals)
-               
-                t = donor.program[terminal_i]
-                t = -(t+1)
-                #print(terminal_i , donor.program ,donor.program[terminal_i],donor.terminals , len(donor.program) )
-                new_program = copy.deepcopy(donor.program)
-                r = donor.get_path_range(terminal_i)
-                if  r / self.target_range > 1:
-                    choice_i = [ i  for i in range(len(self.rangeX)) if self.rangeX[i] < self.rangeX[t]   ] #need smaller terminal X
-                    
-                    if choice_i != []:
-                        new_term = -(random.choice(choice_i)+1)
-                        new_program[terminal_i] = new_term 
-                    else:
-                 
-                        new_program[terminal_i] = -1 * random.randint(1,len(self.terminal_set))
-                else:
-                    choice_i = [ i for i in range(len(self.rangeX)) if self.rangeX[i] > self.rangeX[t]   ] #need bigger terminal X
-                  
-                    if choice_i != []:
-                        new_term = -(random.choice(choice_i)+1)
-                        #print(new_term)
-                        new_program[terminal_i] = new_term
-                    else:
-                       
-                        new_program[terminal_i] = -1 * random.randint(1,len(self.terminal_set))
-                #print(new_program)
-                self.next_programs[i] = Program(self.terminal_set , self.function_set , program=new_program)
-                self.next_programs[i].fitness = get_fitness_MAD(self.next_programs[i] , self.X , self.y)
-                #print( self.programs[i].fitness , self.next_programs[i].fitness)
-                self.next_programs[i].from_method = 0
-            elif p < 1:
-
-                #ranger crossover 
-                    """
-                    donor = self.tournament_selection()
-                    receiver = self.tournament_selection()
-                    self.programs[i] = self.one_point_crossover(donor , receiver)
-                    self.programs[i].fitness = get_fitness_MAD(self.programs[i] , self.X , self.y)
-                    """
-                    donor = self.tournament_selection()
-                    arg_receiver_idx = None
-                    arg_receiver_func = None
-
-                    start = donor.cut_point
-                    end = donor.get_subtree(donor.cut_point)
-
-                    softmax_prob = None
-                    if donor.func_range > 1:
-                        softmax_prob = random.uniform(1 - (1/donor.func_range),1)
-                    else:
-                        softmax_prob = random.uniform(0,donor.func_range) #small
-
-                    if softmax_prob > 0.5:
-                        if self.cluster_smaller[1] != []:
-                            arg_receiver_idx = random.choice(self.cluster_smaller[1])
-                        elif self.smaller_function != []:
-                            arg_receiver_func = random.choice(self.smaller_function)
-                    
-
-                    else :
-                        if self.cluster_bigger[1] != []:
-                            arg_receiver_idx = random.choice(self.cluster_bigger[1])
-                        elif self.bigger_function != []:
-                            arg_receiver_func = random.choice(self.bigger_function)
-
-                    t = len(self.terminal_set)
-                    choice_1 = -1 * random.randint(1,t)
-                    choice_2 = -1 * random.randint(1,t)
-
-
-                    # update for mutation
-                    self.bigger_function = []
-                    self.smaller_function = []
-                    _min_x = min(min(self.X[:,-(choice_1+1)]) , min(self.X[:,-(choice_2+1)]))
-                    _max_x = max(max(self.X[:,-(choice_1+1)]) , max(self.X[:,-(choice_2+1)]))
-                    idx = 0
-      
-                    for f in function_set:
-                        if f.arity == 1:
-                            output = [f(x) for x in self.X]
-                        
-                            r = abs( max(output) - min(output) ) / abs( _max_x - _min_x )
-                        
-                            if r > 1:
-                                self.bigger_function.append(idx)
-                            elif r < 1: 
-                                self.smaller_function.append(idx)
-                            idx+=1
-                        elif f.arity == 2:
-                            output = f(self.X[:,-(choice_1+1)], self.X[:,-(choice_2+1)])  
-
-                   
-                            r = abs( max(output) - min(output) ) / abs( _max_x - _min_x )
-                        
-                            if r > 1:
-                                self.bigger_function.append(idx)
-                            elif r < 1: 
-                                self.smaller_function.append(idx)
-                            idx+=1
-
-
-
-                    if arg_receiver_idx != None:
-                        receiver = self.programs[arg_receiver_idx]
-                        r_start = receiver.cut_point
-                        r_end = receiver.get_subtree(receiver.cut_point)
-
-                        new_program =  donor.program[:start] + receiver.program[r_start:r_end+1] + donor.program[end+1:]
-                
-
-                    elif arg_receiver_func != None: 
-                        
-                        new_program =  donor.program[:start] + [ arg_receiver_func,  choice_1 ,  choice_2 ] + donor.program[end+1:]
-                        
-                    else:
-                        random_func = random.randint(0, len(self.function_set)-1)
-                        new_program = donor.program[:start] + [ random_func, choice_1, choice_2 ] + donor.program[end+1:]
-                    
-                    self.next_programs[i] = Program(self.terminal_set , self.function_set , program=new_program)
-                    self.next_programs[i].fitness = get_fitness_MAD(self.next_programs[i] , self.X , self.y)
-                    self.next_programs[i].from_method = 1
-                    
-            elif p < 1: #reproduced
-                    donor = self.tournament_selection()
-                    self.programs[i] = copy.deepcopy(donor)
-        
-        # replace
-        dim_mu_success = 0
-        for i in range(self.num_population):
-            
-            if self.programs[i].fitness > self.next_programs[i].fitness:
-                #print("before:",self.parent_func[i] , self.parent_args[i])
-                #print("after:",self.next_programs[i].program)
-                if self.next_programs[i].from_method == 0:
-                    dim_mu_success+=1
-                self.programs[i]._copy(self.next_programs[i])
-                
-        #print("dim_mu_success:" , dim_mu_success)
-        #print(success)    
-        self.programs = sorted(self.programs, key=lambda p: p.fitness)
-    def run(self):
-        for g in range(self.generation):
-            # build cluster for funcs and args
-            _id = 0
-            self.cluster_bigger = [[] , []] 
-            self.cluster_smaller = [[], []] 
-
-            for p in self.programs:
-               
-                if len(p.program) == 1:
-                    self.programs[_id] = Program(self.terminal_set , self.function_set)
-                    self.programs[_id].fitness = get_fitness_MAD(self.programs[_id], self.X , self.y)
-                    #print("neeeeeeew")
-                p = self.programs[_id]
-                p.cut_point = random.randint(1,len(p.program)-1)
-                #print(p.cut_point)
-                #print(p.program)
-                #print(p.program[:p.cut_point] , p.program[p.cut_point:])
-                #print( "===", _id , p.range , p.program ,  p.cut_point  )
-                
-                func_range = p.get_path_range(p.cut_point)   #  path range
-                
-                #arg_program = p.program[ p.cut_point : p.get_subtree(p.cut_point)+1 ]
-                #Max_ = max([ self.maxX[-(a+1)] for a in arg_program if a < 0])
-                #min_ = min([ self.minX[-(a+1)] for a in arg_program if a < 0])
-
-
-                args_range = ( abs( max(p.values[p.cut_point]) - min(p.values[p.cut_point]))
-                                / abs( 1 ) )  #  output_range  /  1
-
-                
-
-             
-                p.intron_removal(p.cut_point)
-                p.get_parent_forall()
-               
-                
-                if (func_range / self.target_range) > 1:
-                    p.func_range = func_range / self.target_range
-                    self.cluster_bigger[0].append(_id)
-                    
-                else:
-                    p.func_range = func_range / self.target_range
-                    self.cluster_smaller[0].append(_id)
-                
-                #print(args_range , self.target_range)
-                if (args_range ) > 1:
-                    p.arg_range = 1
-                    self.cluster_bigger[1].append(_id)
-                else:
-                    p.arg_range = -1
-                    self.cluster_smaller[1].append(_id)
-                #print(_id)
-                """
-                if len(self.programs[_id].program) != len(self.programs[_id].parentIdx):
-                    print("gen",g)
-                    print(self.programs[_id].program , self.programs[_id].parentIdx )
-                    exit()
-                """
-                _id += 1
-
-            #print("big" , self.cluster_bigger)
-            #print("small" , self.cluster_smaller)
-            self.run_once()
-            
-            #self._print_programs()
-           
-            
-        self.programs = sorted(self.programs, key=lambda p: p.fitness)
-    
-
-
-
-
-    def _print_programs(self):
- 
-        i = 0
-        for p in self.programs:
-            print(i, p.fitness) 
-            p.printX()
-            print()
-            i+=1    
-    
-
-
+def cal_range( X ):
+    return 0
 
 class Program : #binary version
-    def __init__(self , terminal_set  , function_set , depth = 5 ,program = None ):
+    def __init__(self , terminal_set  , function_set , depth = 3 ,program = None ):
         self.from_method = -1 #init 
         self.terminal_set = terminal_set
         self.function_set = function_set
+        self.function_set_arity = {}
+        for f in self.function_set:
+            if f.arity in self.function_set_arity:
+                self.function_set_arity[f.arity].append(f)
+            else:
+                self.function_set_arity[f.arity] = [f]
         self.depth = depth
         self.fitness = None
         self.values = []
+        self.cluster_id = -1
         if program is None :
             self.random_init(self.depth)
+            
         else:
-            self.program = program
+            self.program = copy.deepcopy(program)
         # should evaluate when new a program !!!
 
     def valid(self, program):
@@ -448,7 +133,9 @@ class Program : #binary version
         Counter = [self.function_set[program[0]-1].arity]
         #print("====", program)
         for p in program[1:]:
-           #print(p , Counter)    
+            #print(program)
+            #print(p , Counter)    
+            
             if p < 0:
                 Counter[-1] -= 1
             else:
@@ -458,6 +145,16 @@ class Program : #binary version
                 Counter.pop()
         return (Counter == [])
 
+    def get_cut_point(self ):
+        candidate = [  i for i in range(len(self.program)) if self.program[i] >= 0 
+                        and i!=0 
+                       ]
+        
+        if candidate == []:
+            return 0
+        else:
+            return random.choice(candidate)
+    
     def execute(self,X):
         """
         value  :  tree length list , each element is each input result at i 
@@ -469,10 +166,10 @@ class Program : #binary version
             print("WROOOOOONNNNNG")
             return None
         self.terminals = []
-        self.range = []
+        self.ranges = []
         self.values = []
         output = []
-
+        self.get_parent_forall()
         for p in reversed(self.program):
            
             #print(p , self.program  )
@@ -489,6 +186,8 @@ class Program : #binary version
                     if self.function_set[p-1].arity == 1:
                         tmp = self.function_set[p-1](self.values[-1])
                         output[-1] = tmp
+
+                        
                     if self.function_set[p-1].arity == 2:
                         
                         
@@ -496,23 +195,25 @@ class Program : #binary version
                         output[-2] = tmp
                         output.pop()
          
-            
+                            
             self.values.append(tmp)
           
            
-
+        
            
         self.values = list(reversed(self.values))
         #print(self.values)
         self.y_hat = self.values[0]
-
+        self.ranges = [ -1] * len(self.values)
+        for i in range(1,len(self.program)):
+            self.ranges[i] =  cal_range(self.values[i])
         self.intron_removal()
-        self.get_parent_forall()
+        
         
         return self.y_hat
     
     def intron_removal(self , at_i = 0):
-    
+        #return
         # for subtree of subtree
         # ****[---[+++]---]****
         #      ^   ^      ^
@@ -567,34 +268,20 @@ class Program : #binary version
                 remain.append( self.function_set[ self.program[i]-1 ].arity )
 
     def get_path_range(self,i):
-        cur = i
-        res = 1
-        #print(len(self.parentIdx) , cur)
-        while self.parentIdx[cur] != -1:
-           
-            parent = self.parentIdx[cur]
-
-            if abs( max(self.values[cur]) - min(self.values[cur]) )!= 0:
-                res*= ( 
-                    abs( max(self.values[parent]) - min(self.values[parent]))
-                    / abs( max(self.values[cur]) - min(self.values[cur]) ))
-            else:
-                res *= 0
-
-            cur = parent 
-            
-        return res
-
+       
+        if abs( max(self.values[i]) - min(self.values[i]) ) != 0:
+            return abs( max(self.values[0]) - min(self.values[0])) / abs( max(self.values[i]) - min(self.values[i]) )
+        else:
+            return 0
 
 
     def random_init(self , depth = 3):
         t = len(self.terminal_set)
         f = len(self.function_set)
         #ramp half and half 
-        p = random.uniform(0, 2)
+        p = random.uniform(0, 1)
         self.program = []
         if p < 2:# full
-            
             d = 0
             Counter = []
 
@@ -618,7 +305,6 @@ class Program : #binary version
                             break
 
         else:
-            
             d = 0
             not_terminal = True
             while (d < depth and not_terminal) :
@@ -636,6 +322,7 @@ class Program : #binary version
                 d+=1
 
     def printX(self):
+        #print("\n",self.program ,self.fitness)
         if len(self.program) == 1:
             print("X" + str(-(self.program[0]+1)) , end=" ")
             return 
@@ -652,7 +339,7 @@ class Program : #binary version
             while Counter != [] and Counter[-1] == 0:
                 Counter.pop()
                 print(")",end=" ")
-
+        print("\nend\n")
 
     def get_subtree(self , i):
    
@@ -660,12 +347,13 @@ class Program : #binary version
             return i
         counter = self.function_set[self.program[i]-1].arity 
         cur = i
-
+       
         while counter != 0:
+            #print(counter,self.program[cur])
             cur += 1
             counter -= 1
             if self.program[cur] >= 0:
-                counter += self.function_set[self.program[i]-1].arity 
+                counter += self.function_set[self.program[cur]-1].arity 
         return cur
     def _copy(self,p):
         self.program = copy.deepcopy(p.program)
@@ -674,12 +362,13 @@ class Program : #binary version
         self.parentIdx = copy.deepcopy(p.parentIdx)
         
         
+        
             
         
-function_set = [ CommonFunction["and"] 
-                ,  CommonFunction["or"]
-                ,  CommonFunction["xor"] 
-    
+function_set = [ CommonFunction["add"] 
+                ,  CommonFunction["sub"]
+                ,  CommonFunction["mul"] 
+                , CommonFunction["div"]
                 ]
 
 def BinaryToDecimal( binary ):
@@ -687,12 +376,14 @@ def BinaryToDecimal( binary ):
     #print(n)
     return int(n,2)
 
-from itertools import product
-X = list(product([1, 0], repeat=3) )
+#from itertools import product
+#X = list(product([1, 0], repeat=5) )
 # [[true , true , true ] ...  ] 
 
+X = np.linspace(-1,1)
 
-X = np.array( [np.array(x) for x in X] )
+X = np.array( [ np.array([np.array(x)]) for x in X] )
+print(X)
 # 2**n 個input , output   [1,0,0,1 ...] #len = 2**n
 # 2**(2**n)種class
 
@@ -700,18 +391,22 @@ import json
 
 output = []
 id = 0
-for d in range(1,8):
-    print( d,len(function_set)*(2**d) * len(X[0])*(2**d)  )
-    all_binary = len(function_set)*(2**d) * len(X[0])*(2**d)  
-    for _ in range( all_binary//2 + 1 ):
+for d in range(1,5):
+    print( d,(len(function_set))**(2**d)   )
+    all_binary = (len(function_set))**(2**d)  
+  
+    num = 10*d**3
+    print(num)
+    #num = 10*d**3
+    for _ in range( num ):
         
         output.append({})
         test = Program( [ i for i in range(len(X[0])) ] , function_set , depth=d)
         output[-1]["program"] = test.program
         output[-1]["output"] = list(test.execute(X))
 
-        output[-1]["output"] = [ str(int(i)) for i in output[-1]["output"] ]
-        output[-1]["output"] = BinaryToDecimal( output[-1]["output"])  
+        #output[-1]["output"] = [ int(i) for i in output[-1]["output"] ]
+        #output[-1]["output"] = BinaryToDecimal( output[-1]["output"])  
 
         output[-1]["id"] = id
         id += 1

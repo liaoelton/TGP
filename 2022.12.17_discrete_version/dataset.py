@@ -23,13 +23,16 @@ class SeqClsDataset(Dataset):
         self.max_len = max_len
 
         self.token2idx = {
-            -3 : 1,
-            -2 : 2,
-            -1 : 3,
+            -5 : 1,
+            -4 : 2,
+            -3 : 3,
+            -2 : 4,
+            -1 : 5,
             0  : 0,
-            1  : 4,
-            2  : 5,
-            3  : 6, 
+            1  : 6,
+            2  : 7,
+            3  : 8, 
+            4  : 9,
         }
 
     def _token2idx( self, program ):
@@ -70,7 +73,14 @@ class SeqClsDataset(Dataset):
         batch['program'] = torch.tensor(batch['program'], dtype=torch.float)
 
         
-        batch['output'] = [s['output'] for s in samples]
+        batch['output'] = [ abs( max(s['output']) - min(s['output'])) for s in samples    ]
+        for i in range(len(batch['output'] )):
+            if batch['output'][i] < 2:
+                batch['output'][i] = 2
+            elif batch['output'][i] > 2:
+                batch['output'][i] = 0
+            else:
+                batch['output'][i] = 1
         # batch['id'] = [s['id'] for s in samples]
         if 'output' in samples[0].keys():
             batch['output'] = torch.tensor(batch['output'])
